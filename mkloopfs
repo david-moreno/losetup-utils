@@ -1,0 +1,150 @@
+#!/bin/bash
+
+# mkloopfs - Creates an encrypted volume as described in losetup(8)
+#
+# Copyright (C) 2012 David Moreno <dmc.coder@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+#Number of arguments used.
+ARGS_MIN=2
+ARGS_MAX=6
+
+#Default values.
+UNITS="M"
+CYPHER="blowfish"
+FILESYSTEM="ext2"
+LABEL=""
+CRYPTOLOOP="cryptoloop"
+VERSION="1.0"
+AUTHOR="(C)2012 David Moreno <dmc.coder@gmail.com>"
+
+#Error codes.
+ERROR_OK=0
+ERROR_FILE_EXISTS=1
+ERROR_MOD_CRYPTOLOOP=2
+ERROR_MOD_CYPHER=3
+ERROR_FILE_CREATE=4
+ERROR_ENCRYPT=5
+ERROR_FILESYSTEM=6
+
+function show_help {
+	pname=`basename $0`
+	help="$pname - Creates an encrypted volume as described in losetup(8)\n"\
+"Version: $VERSION\n"\
+"Usage: $pname [FILE SIZE [UNITS CYPHER FS LABEL]]\n\n"\
+"\tFILE\tThe name of the volume to create\n"\
+"\tSIZE\tThe size of the volume, in megabytes as default\n"\
+"\tUNITS\tSize of the units\n"\
+"\tCYPHER\tThe cypher algorithm used to encrypt the volume, $CYPHER as default\n"\
+"\tFS\tType of filesystem for the volume, $FILESYSTEM as default\n"\
+"\tLABEL\tThe label of the volume (ext2 maximum is 16 characters)\n"\
+"\nUNITS can be K, M, G, T, P, E, Z or Y (see dd(1) for more suffixes) for Kilobyte, Megabyte, Gigabyte, etc.\n"\
+"You must run this script as root\n"\
+"\n$AUTHOR"
+	echo -e $help
+}
+
+#Checks the arguments.
+if [[ $# -lt $ARGS_MIN || $# -gt $ARGS_MAX ]]; then
+	show_help
+	exit $ERROR_OK
+fi
+
+FILE=$1
+SIZE=$2
+
+if [ $# -ge 3 ]; then
+	UNITS=$3
+fi
+
+if [ $# -ge 4 ]; then
+	CYPHER=$4
+fi
+
+if [ $# -ge 5 ]; then
+	FILESYSTEM=$5
+fi
+
+if [ $# -eq 6 ]; then
+	LABEL="-L $6"
+fi
+
+#We are root?
+if [[ $EUID -ne 0 ]]; then
+	echo "This script must be run as root"
+	exit $ERROR_OK
+fi
+
+#Gets an available loop device.
+LOOP=`losetup -f`
+if [ -z $LOOP ]; then
+	echo "ERROR: There's no loop device available"
+	exit $ERROR_LOOP
+fi
+
+#FILE exists?
+if [ -e $FILE ]; then
+	echo "ERROR: $FILE exists!"
+	exit $ERROR_FILE_EXISTS
+fi
+
+#Loads the appropiate modules.
+if [[ -z `lsmod | grep $CRYPTOLOOP` ]]; then
+	echo "Loading $CRYPTOLOOP"
+	modprobe $CRYPTOLOOP
+	if [ $? -ne 0 ]; then
+		echo "ERROR: Cannot load $CRYPTOLOOP"
+		exit $ERROR_MOD_CRYPTOLOOP
+	fi
+fi
+
+if [[ -z `lsmod | grep $CYPHER` ]]; then
+	echo "Loading $CYPHER"
+	modprobe $CYPHER
+	if [ $? -ne 0 ]; then
+		echo "ERROR: Cannot load $CYPHER"
+		exit $ERROR_MOD_CYPHER
+	fi
+fi
+
+#Creates an empty file filled with 0's.
+dd if=/dev/zero of=$FILE bs=1$UNITS count=$SIZE
+if [ $? -ne 0 ]; then
+	echo "ERROR: Cannot create $FILE"
+	exit $ERROR_FILE_CREATE
+fi
+
+#Binds an encrypted loop device with the file.
+losetup -e $CYPHER $LOOP $FILE
+if [ $? -ne 0 ]; then
+	echo "ERROR: Cannot encrypt $FILE"
+	exit $ERROR_ENCRYPT
+fi
+
+#Creates a volume.
+mkfs -t $FILESYSTEM $LABEL $LOOP
+if [ $? -ne 0 ]; then
+	echo "ERROR: Cannot create a $FILESYSTEM filesystem on '$FILE'"
+	exit $ERROR_FILESYSTEM
+fi
+
+#Frees the used loop device.
+losetup -d $LOOP
+
+#TODO: The resulting volume belongs to the root.
+#      So, we need to chown(1) to the original user automatically.
+
+echo "$FILESYSTEM volume '$FILE' created successfully"
+exit $ERROR_OK

@@ -1,0 +1,125 @@
+#!/bin/bash
+
+# mount.loopfs - Mounts an encrypted volume as described in losetup(8)
+#
+# Copyright (C) 2012 David Moreno <dmc.coder@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+#Number of arguments used.
+ARGS_MIN=2
+ARGS_MAX=3
+
+#Default values.
+CYPHER="blowfish"
+CRYPTOLOOP="cryptoloop"
+FILESYSTEM="ext2"
+VERSION="1.0"
+AUTHOR="(C)2012 David Moreno <dmc.coder@gmail.com>"
+
+#Error codes.
+ERROR_OK=0
+ERROR_IMAGE=1
+ERROR_DIR=2
+ERROR_LOOP=3
+ERROR_MOD_CRYPTOLOOP=4
+ERROR_MOD_CYPHER=5
+ERROR_LOSETUP=6
+ERROR_MOUNT=7
+
+function show_help {
+	pname=`basename $0`
+	help="$pname - Mounts an encrypted $FILESYSTEM volume as described in losetup(8)\n"\
+"Version: $VERSION\n"\
+"Usage: $pname [IMAGE DIR [CYPHER]]\n\n"\
+"\tIMAGE\tThe encrypted volume to mount\n"\
+"\tDIR\tThe directory where IMAGE will be mounted\n"\
+"\tCYPHER\tThe cypher algorithm used to decrypt the image\n"\
+"\nThe default cypher is $CYPHER. This program must be run as root\n"\
+"\n$AUTHOR"
+	echo -e $help
+}
+
+#Checks the arguments.
+if [[ $# -lt $ARGS_MIN || $# -gt $ARGS_MAX ]]; then
+	show_help
+	exit $ERROR_OK
+fi
+
+IMAGE=$1
+DIR=$2
+
+if [ $# -eq $ARGS_MAX ]; then
+	CYPHER=$3
+fi
+
+#We are root?
+if [[ $EUID -ne 0 ]]; then
+	echo "This script must be run as root"
+	exit $ERROR_OK
+fi
+
+#The encrypted image exists?
+if [ ! -e $IMAGE ]; then
+	echo "ERROR: The image file does not exist: $IMAGE"
+	exit $ERROR_IMAGE
+fi
+
+#The mount directory exists?
+if [ ! -d $DIR ]; then
+	echo "ERROR: The mount directory does not exist: $DIR"
+	exit $ERROR_DIR
+fi
+
+#We have some loop device available?
+LOOP=`losetup -f`
+if [ -z $LOOP ]; then
+	echo "ERROR: There's no loop device available"
+	exit $ERROR_LOOP
+fi
+
+#Loads the appropiate modules.
+if [[ -z `lsmod | grep $CRYPTOLOOP` ]]; then
+	echo "Loading $CRYPTOLOOP"
+	modprobe $CRYPTOLOOP
+	if [ $? -ne 0 ]; then
+		echo "ERROR: Cannot load $CRYPTOLOOP"
+		exit $ERROR_MOD_CRYPTOLOOP
+	fi
+fi
+
+if [[ -z `lsmod | grep $CYPHER` ]]; then
+	echo "Loading $CYPHER"
+	modprobe $CYPHER
+	if [ $? -ne 0 ]; then
+		echo "ERROR: Cannot load $CYPHER"
+		exit $ERROR_MOD_CYPHER
+	fi
+fi
+
+#Mounts the image.
+losetup -e $CYPHER $LOOP $IMAGE
+if [ $? -ne 0 ]; then
+	echo "ERROR: Cannot setup $LOOP"
+	exit $ERROR_LOSETUP
+fi
+
+mount -t$FILESYSTEM $LOOP $DIR
+if [ $? -ne 0 ]; then
+	echo "ERROR: Cannot mount $LOOP on $DIR"
+	exit $ERROR_MOUNT
+fi
+
+echo "'$IMAGE' mounted in '$DIR' using '$LOOP' loop device"
+exit $ERROR_OK
