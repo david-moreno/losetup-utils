@@ -23,7 +23,7 @@ ARGS_MAX=6
 
 #Default values.
 UNITS="M"
-CYPHER="blowfish"
+CIPHER="blowfish"
 FILESYSTEM="ext2"
 LABEL=""
 CRYPTOLOOP="cryptoloop"
@@ -34,7 +34,7 @@ AUTHOR="(C)2012 David Moreno <dmc.coder@gmail.com>"
 ERROR_OK=0
 ERROR_FILE_EXISTS=1
 ERROR_MOD_CRYPTOLOOP=2
-ERROR_MOD_CYPHER=3
+ERROR_MOD_CIPHER=3
 ERROR_FILE_CREATE=4
 ERROR_ENCRYPT=5
 ERROR_FILESYSTEM=6
@@ -43,11 +43,11 @@ function show_help {
 	pname=`basename $0`
 	help="$pname - Creates an encrypted volume as described in losetup(8)\n"\
 "Version: $VERSION\n"\
-"Usage: $pname [FILE SIZE [UNITS CYPHER FS LABEL]]\n\n"\
+"Usage: $pname [FILE SIZE [UNITS CIPHER FS LABEL]]\n\n"\
 "\tFILE\tThe name of the volume to create\n"\
 "\tSIZE\tThe size of the volume, in megabytes as default\n"\
 "\tUNITS\tSize of the units\n"\
-"\tCYPHER\tThe cypher algorithm used to encrypt the volume, $CYPHER as default\n"\
+"\tCIPHER\tThe cipher algorithm used to encrypt the volume, $CIPHER as default\n"\
 "\tFS\tType of filesystem for the volume, $FILESYSTEM as default\n"\
 "\tLABEL\tThe label of the volume (ext2 maximum is 16 characters)\n"\
 "\nUNITS can be K, M, G, T, P, E, Z or Y (see dd(1) for more suffixes) for Kilobyte, Megabyte, Gigabyte, etc.\n"\
@@ -70,7 +70,7 @@ if [ $# -ge 3 ]; then
 fi
 
 if [ $# -ge 4 ]; then
-	CYPHER=$4
+	CIPHER=$4
 fi
 
 if [ $# -ge 5 ]; then
@@ -110,12 +110,12 @@ if [[ -z `lsmod | grep $CRYPTOLOOP` ]]; then
 	fi
 fi
 
-if [[ -z `lsmod | grep $CYPHER` ]]; then
-	echo "Loading $CYPHER"
-	modprobe $CYPHER
+if [[ -z `lsmod | grep $CIPHER` ]]; then
+	echo "Loading $CIPHER"
+	modprobe $CIPHER
 	if [ $? -ne 0 ]; then
-		echo "ERROR: Cannot load $CYPHER"
-		exit $ERROR_MOD_CYPHER
+		echo "ERROR: Cannot load $CIPHER"
+		exit $ERROR_MOD_CIPHER
 	fi
 fi
 
@@ -127,7 +127,7 @@ if [ $? -ne 0 ]; then
 fi
 
 #Binds an encrypted loop device with the file.
-losetup -e $CYPHER $LOOP $FILE
+losetup -e $CIPHER $LOOP $FILE
 if [ $? -ne 0 ]; then
 	echo "ERROR: Cannot encrypt $FILE"
 	exit $ERROR_ENCRYPT
