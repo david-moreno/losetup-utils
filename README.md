@@ -12,6 +12,25 @@ losetup is still fast, easy and practical in many situations like:
 
 This scripts attempts to use losetup a bit easier and faster.
 
+Install
+-------
+
+You can clone this repository or download it as a zip file. To clone:
+
+    $ git clone https://github.com/david-moreno/losetup-utils
+
+Move to the losetup-utils directory:
+
+    $ cd losetup-utils
+
+Copy the scripts to `/usr/bin` (or another directory with executables in your *$PATH*):
+
+    # cp *loopfs* /usr/bin      # You must be root.
+
+Alternatively, you can use *sudo*:
+
+    $ sudo cp *loopfs* /usr/bin
+
 Usage
 -----
 
